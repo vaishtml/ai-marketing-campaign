@@ -1,50 +1,68 @@
 import streamlit as st
 import requests
 from google import genai
+from io import BytesIO
 
-# Initialize Gemini client
+# Initialize Gemini Client
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-st.title("🚀 AI Marketing Campaign Generator")
+st.title("AI Marketing Campaign Generator")
 
-product_desc = st.text_area("📝 Enter Product Description")
-target_audience = st.text_area("🎯 Enter Target Audience")
+product_desc = st.text_area("Product Description")
+target_audience = st.text_area("Target Audience")
+
 
 if st.button("Generate Campaign"):
     if product_desc and target_audience:
 
-        # Generate Ad Copy (Gemini)
-        prompt = f"Write a catchy, engaging marketing ad for '{product_desc}' targeted at '{target_audience}'. Keep it short and appealing."
-        with st.spinner("🖊 Generating ad copy..."):
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            ad_copy = response.text.strip()
+        # 1. Generate Ad Copy (Gemini)
+        ad_prompt = (
+            "You are an expert marketing copywriter. "
+            "Write a short, catchy, high-converting promotional message for the following product:\n\n"
+            f"Product: {product_desc}\n"
+            f"Target Audience: {target_audience}\n\n"
+            "Tone: modern, engaging, persuasive.\n"
+            "Length: 1–2 sentences.\n"
+            "Avoid clichés and make it sound fresh and appealing."
+        )
 
-        st.subheader("📢 Generated Ad Copy")
+        with st.spinner("Generating ad copy..."):
+            ad_response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=ad_prompt
+            )
+            ad_copy = ad_response.text.strip()
+
+        st.subheader("Generated Ad Copy")
         st.write(ad_copy)
 
-        # Generate Image via Hugging Face SDXL (new router endpoint)
-        st.subheader("🖼 Generated Creative")
+
+        # 2. Generate Image via Hugging Face SDXL
+        st.subheader("Generated Creative")
+
         API_URL = "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0"
         headers = {"Authorization": f"Bearer {st.secrets['STABLE_DIFFUSION_API_KEY']}"}
         payload = {"inputs": f"{product_desc}, targeted for {target_audience}"}
 
-        with st.spinner("⏳ Generating image..."):
+        with st.spinner("Generating image..."):
             img_response = requests.post(API_URL, headers=headers, json=payload)
 
             if img_response.status_code == 200:
-                with open("creative.png", "wb") as f:
-                    f.write(img_response.content)
+                image_bytes = img_response.content
 
-                st.image("creative.png", caption="Generated Creative", use_container_width=True)
+                # Display image
+                st.image(image_bytes, caption="Generated Creative", use_container_width=True)
 
-                with open("creative.png", "rb") as f:
-                    st.download_button("⬇ Download Image", f, file_name="creative.png")
+                # Download button
+                st.download_button(
+                    "Download Image",
+                    data=image_bytes,
+                    file_name="generated_image.png",
+                    mime="image/png"
+                )
 
             else:
                 st.error(f"Image generation failed: {img_response.status_code}\n{img_response.text}")
 
     else:
-        st.warning("⚠ Please fill in both product description and target audience.")
+        st.warning("Please fill in both product description and target audience.")
